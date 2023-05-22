@@ -1,8 +1,15 @@
 const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 const { v4: uuidv4 } = require("uuid");
 const app = express();
 const port = 3000;
 
+app.use(express.json())
+app.use(cors())
 const USERS = [];
 
 const QUESTIONS = [
@@ -36,23 +43,27 @@ app.post("/signup", (req, res) => {
   const { email, password } = req.body;
 
   //check if user already exists
-  const userExists = USERS.some((user) => user.email === email);
-  if (userExists) {
-    return res.status(409).send("User already exists");
-  }
-
+  bcrypt.hash(password, saltRounds, (err, hash) => {
+    if (err) {
+      return res.status(500).send(err);
+    }
+    const userExists = USERS.some((user) => user.email === email);
+    if (userExists) {
+      return res.status(409).send("User already exists");
+    }
+    const newUser = {
+      email,
+      hash,
+    };
+    USERS.push(newUser);
+  });
   //Create a new user
-  const newUser = {
-    email,
-    password,
-  };
-  USERS.push(newUser);
-
   // Return a success response to the client
   res.sendStatus(200);
 });
 
 app.post("/login", (req, res) => {
+  console.log(req.body);
   const { email, password } = req.body;
 
   const user = USERS.find((user) => user.email === email);
@@ -60,6 +71,11 @@ app.post("/login", (req, res) => {
     return res.status(409).send("Invalid email or password");
   }
 
+  bcrypt.compare(password, user.hash, (err, result) => {
+    if (result === true) {
+      res.status(200).send("Successfully logged in.");
+    }
+  });
   const token = uuidv4();
   user.token = token;
   res.status(200).json({ token });
